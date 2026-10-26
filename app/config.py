@@ -42,9 +42,10 @@ class Settings(BaseSettings):
     # --- Slurm REST API -----------------------------------------------------
     slurm_rest_url: str = "http://slurmctld:6820"
     slurm_api_version: str = "v0.0.40"
+    slurm_verify_tls: bool = True  # set False to skip TLS verification
     slurm_jwt: str = ""            # the JWT token
     slurm_jwt_file: str = ""       # optional file containing the JWT token
-    slurm_user: str = "root"       # the username to authenticate as
+    slurm_user: str = ""           # submit jobs as this user (X-SLURM-USER-NAME)
     slurm_partition: str = ""
     slurm_qos: str = ""
     slurm_account: str = ""

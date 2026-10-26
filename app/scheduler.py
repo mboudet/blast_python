@@ -166,9 +166,12 @@ class SlurmScheduler(Scheduler):
         settings = get_settings()
         self.base = settings.slurm_rest_url.rstrip("/")
         self.version = settings.slurm_api_version
+        self.verify = settings.slurm_verify_tls
         self.headers = {}
         if settings.slurm_token:
             self.headers["X-SLURM-USER-TOKEN"] = settings.slurm_token
+        if settings.slurm_user:
+            self.headers["X-SLURM-USER-NAME"] = settings.slurm_user
 
     def _url(self, path: str) -> str:
         return f"{self.base}/slurm/{self.version}/{path}"
@@ -204,6 +207,7 @@ class SlurmScheduler(Scheduler):
             self._url("job/submit"),
             json={"job": description},
             headers=self.headers,
+            verify=self.verify,
             timeout=60,
         )
         resp.raise_for_status()
@@ -221,6 +225,7 @@ class SlurmScheduler(Scheduler):
             resp = self._httpx.get(
                 self._url(f"job/{job.scheduler_job_id}"),
                 headers=self.headers,
+                verify=self.verify,
                 timeout=30,
             )
             resp.raise_for_status()

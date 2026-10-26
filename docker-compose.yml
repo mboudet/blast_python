@@ -6,6 +6,15 @@ services:
       - "8000:8000"
     environment:
       JOBS_METHOD: slurm
+      # Create/run as a user with the provided uid/gid (shared with the compute
+      # nodes so jobs run under the same user). Leave empty for defaults.
+      UID:
+      GID:
+      APP_USER: blast
+      APP_GROUP: blast
+      # Submit jobs as the same user (X-SLURM-USER-NAME impersonation; the
+      # SLURM_JWT token must belong to a user with SlurmUser/admin rights).
+      SLURM_USER: blast
       SLURM_REST_URL: http://slurmctld:6820
       SLURM_API_VERSION: v0.0.40
       SLURM_JWT_FILE: /run/secrets/slurm_jwt

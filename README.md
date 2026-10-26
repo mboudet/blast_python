@@ -60,6 +60,12 @@ The image installs the NCBI BLAST tools (needed to run the jobs) alongside the
 FastAPI server. See `docker-compose.yml` for the env vars; the Slurm JWT can be
 mounted as a secret via `SLURM_JWT_FILE`.
 
+At launch, `/entrypoint.sh` creates a user/group from the `UID`/`GID` env vars
+(names `APP_USER`/`APP_GROUP`, default `blast`) and then drops privileges to run
+uvicorn as that user. This mirrors `docker-sf-blast`: jobs are submitted (DRMAA)
+or authenticated (Slurm) as that user, so they run on the compute nodes under the
+same uid/gid.
+
 ## Configuration
 
 See `.env.example` for all options. Key settings:

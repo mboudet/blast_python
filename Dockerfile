@@ -22,8 +22,15 @@ COPY config ./config
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     BANKS_CONFIG=/srv/blast/config/banks.yml \
-    LINKS_CONFIG=/srv/blast/config/links.yml
+    LINKS_CONFIG=/srv/blast/config/links.yml \
+    APP_USER='blast' \
+    APP_GROUP='blast' \
+    UID='' \
+    GID=''
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
