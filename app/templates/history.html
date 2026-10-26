@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block scheduler %}
+<div class="jobGeneralInfo">
+    <h3>Recent jobs</h3>
+    {% if jobs %}
+    <ul class="history">
+        {% for job in jobs %}
+            <li>
+                {% set finished, text_status = statuses[job.job_uid] %}
+                {% if finished %}
+                    <img src="{{ static_url('images/tick.png') }}" alt="Job finished" width=16 height=16 style="vertical-align:middle" />
+                {% else %}
+                    <img src="{{ static_url('images/loader_small.gif') }}" alt="Job running" width=16 height=16 style="vertical-align:middle" />
+                {% endif %}
+                {% if job.title %}
+                    <a href="{{ base_url_path }}/job/status/{{ job.job_uid }}">{{ job.title }}</a> {{ job.program_name }} job
+                {% else %}
+                    <a href="{{ base_url_path }}/job/status/{{ job.job_uid }}">{{ job.program_name }} job</a>
+                {% endif %}
+                ({{ job.created_at.strftime('%m/%d/%Y %H:%M:%S') }})
+                {% if not finished %}
+                    <a href="{{ base_url_path }}/job/kill/{{ job.job_uid }}" onclick="return window.confirm('Are you sure you want to terminate this job?')"><img src="{{ static_url('images/kill.png') }}" alt="Kill the job" width=16 height=16 style="vertical-align:middle" /></a>
+                {% endif %}
+            </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+        <p>Sorry, no jobs were found.</p>
+    {% endif %}
+</div>
+{% endblock %}

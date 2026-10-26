@@ -1,0 +1,12 @@
+{% extends "layout.html" %}
+{% block scheduler %}
+<div class="jobGeneralInfo">
+    <h3>Job {{ job.title or job.job_uid }}</h3>
+    {% if success %}
+        <p>The job has been killed successfully.</p>
+    {% else %}
+        <p>The job could not be killed.</p>
+    {% endif %}
+    <p><a href="{{ status_url }}">Back to the job status.</a></p>
+</div>
+{% endblock %}

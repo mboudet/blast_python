@@ -1,0 +1,40 @@
+services:
+  blast:
+    build: .
+    image: blast-server:latest
+    ports:
+      - "8000:8000"
+    environment:
+      # --- Scheduler: "slurm" (REST API) or "drmaa" ---
+      JOBS_METHOD: slurm
+      SLURM_REST_URL: http://slurmctld:6820
+      SLURM_API_VERSION: v0.0.40
+      # SLURM_JWT: <your token>   (or mount a token file and set SLURM_JWT_FILE)
+      SLURM_JWT_FILE: /run/secrets/slurm_jwt
+      SLURM_PARTITION:
+      SLURM_QOS:
+      SLURM_ACCOUNT:
+      SLURM_NATIVE:
+      JOBS_WORK_DIR: /tmp/
+      JOBS_SCHED_NAME: blast
+      CDD_DELTA_PATH:
+      PRE_CMD:
+      # --- Database ---
+      # DATABASE_URL: sqlite:////srv/blast/blast.db
+      # --- Mail ---
+      ADMIN_EMAIL: admin@blast-server
+      ADMIN_NAME: Blast admin
+      SMTP_HOST:
+      SMTP_PORT: "25"
+      SMTP_USER:
+      SMTP_PASS:
+      SMTP_USE_TLS: "false"
+    volumes:
+      - ./config/banks.yml:/srv/blast/config/banks.yml:ro
+      - ./config/links.yml:/srv/blast/config/links.yml:ro
+    secrets:
+      - slurm_jwt
+
+secrets:
+  slurm_jwt:
+    file: ./slurm.jwt

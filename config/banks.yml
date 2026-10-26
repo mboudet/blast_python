@@ -1,0 +1,5 @@
+genouest_blast:
+    db_provider:
+        list:
+            nucleic:      {'/db/some/bank': 'My bank 1', '/db/some/other/bank': 'My bank 2'}
+            proteic:      ~
