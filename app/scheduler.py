@@ -43,15 +43,13 @@ class Scheduler:
 
     def build_job_script(self, job: Job, work_dir: str, lock_file: str = "") -> str:
         """Build the shell script that runs the job (and sends the email)."""
-        script_dir = Path(__file__).resolve().parent
-
         email_part = ""
         if job.has_valid_email():
-            mail = script_dir / "mail.py"
+            settings = get_settings()
+            body_file = os.path.join(work_dir, "mail_body.txt")
             email_part = (
-                f'python3 {mail} --to "{job.email}" '
-                f'--subject "{job.mail_subject}" '
-                f'--body-file "{work_dir}mail_body.txt"'
+                f'/bin/mail -s "{job.mail_subject}" '
+                f'-r "{settings.admin_email}" "{job.email}" < "{body_file}"'
             )
 
         lines = ["#!/bin/bash"]
