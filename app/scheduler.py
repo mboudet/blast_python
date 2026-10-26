@@ -199,8 +199,8 @@ class SlurmScheduler(Scheduler):
         description = {
             "name": job.program_name,
             "script": full_script,
-            "environment": [],
-            "workdir": work_dir,
+            "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
+            "current_working_directory": work_dir,
         }
 
         resp = self._httpx.post(

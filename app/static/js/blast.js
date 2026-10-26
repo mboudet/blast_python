@@ -4,7 +4,7 @@
  * Databank lists come from the global nucleicBanks / proteicBanks objects.
  */
 
-blastFormPrefix = '#blast_';
+blastFormPrefix = '#;
 
 function blastLoaded() {
     refreshControls();
