@@ -8,13 +8,6 @@
         {% block head %}{% endblock %}
     </head>
     <body>
-        <div id="menu">
-            <ul id="nav">
-                {% block menu %}
-                    <li><a title="Access to all your previous results" href="{{ base_url_path }}/job/history">My jobs</a></li>
-                {% endblock %}
-            </ul>
-        </div>
         <div id="middle">
             <div id="content">
                 {% block scheduler %}{% endblock %}

@@ -9,12 +9,9 @@ Both share the same job script / working-directory conventions as the legacy
 application.
 """
 import os
-import shutil
-import subprocess
 from pathlib import Path
 
 from .config import get_settings
-from .database import SessionLocal
 from .models import Job
 
 
@@ -28,9 +25,6 @@ class Scheduler:
         raise NotImplementedError
 
     def get_status_as_text(self, status) -> str:
-        raise NotImplementedError
-
-    def kill(self, job: Job) -> bool:  # pragma: no cover - abstract
         raise NotImplementedError
 
     def is_finished(self, job: Job) -> bool:
@@ -49,7 +43,6 @@ class Scheduler:
 
     def build_job_script(self, job: Job, work_dir: str, lock_file: str = "") -> str:
         """Build the shell script that runs the job (and sends the email)."""
-        settings = get_settings()
         script_dir = Path(__file__).resolve().parent
 
         email_part = ""
@@ -162,19 +155,6 @@ class DrmaaScheduler(Scheduler):
         status = self.get_status(job)
         return status in (self.STATE_UNDETERMINED, self.STATE_FINISHED, self.STATE_FAILED)
 
-    def kill(self, job: Job) -> bool:
-        import drmaa
-
-        session = drmaa.Session()
-        try:
-            session.initialize()
-            session.control(job.scheduler_job_id, drmaa.JobControlAction.TERMINATE)
-            return True
-        except Exception:
-            return False
-        finally:
-            session.exit()
-
 
 class SlurmScheduler(Scheduler):
     """Submit jobs through the Slurm REST API using a JWT token."""
@@ -274,18 +254,6 @@ class SlurmScheduler(Scheduler):
     def is_finished(self, job: Job) -> bool:
         status = self.get_status(job)
         return status.upper() in self.FINAL_STATES or status.upper() == "UNKNOWN" and bool(job.scheduler_job_id)
-
-    def kill(self, job: Job) -> bool:
-        try:
-            resp = self._httpx.delete(
-                self._url(f"job/{job.scheduler_job_id}"),
-                headers=self.headers,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            return True
-        except Exception:
-            return False
 
 
 def get_scheduler() -> Scheduler:

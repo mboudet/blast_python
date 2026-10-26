@@ -37,7 +37,7 @@
     <form name="blast" action="{{ base_url_path }}/" method="post" id="blast" enctype="multipart/form-data">
       <table>
         <tr class="headFields">
-          <td title="Optional, give a title to this job (will be displayed in emails and history)">Job title {{ text('title', values) }}{{ err('title') }}</td>
+          <td title="Optional, give a title to this job (will be displayed in emails)">Job title {{ text('title', values) }}{{ err('title') }}</td>
           <td class="emailField" title="Optional, if you want to receive the results by email">Email address {{ text('email', values) }}{{ err('email') }}</td>
         </tr>
       </table>

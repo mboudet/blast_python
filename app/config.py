@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     base_url_path: str = ""
     secret_key: str = "change-me"
     upload_limit: int = 100  # MiB
-    history_length: int = 8  # days
 
     # --- Database ----------------------------------------------------------
     # Either a full SQLAlchemy URL (sqlite:///..., postgresql://..., mysql://...)

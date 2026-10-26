@@ -8,7 +8,7 @@
  * http://www.cecill.info/licences/Licence_CeCILL_V2-en.txt
  *
  */
- 
+
 html {
     font-size: 100%;
 }
@@ -242,11 +242,4 @@ div.progressBar {
 
 div.jobResults div.viewers ul, div.jobResults div.downloads ul {
   list-style-type: none;
-}
-
-ul.history li {
-  list-style-position:outside;
-  list-style-type:none;
-  margin:0;
-  padding:0;
 }

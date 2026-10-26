@@ -8,7 +8,6 @@
     <p><img src="{{ static_url('images/loader.gif') }}" alt="loading" width=220 height=19 style="vertical-align: middle;" /></p>
     <p class="jobStatus">
         Job status: <span class="status">{{ status }}</span>
-        (<a href="{{ kill_url }}" onclick="return window.confirm('Are you sure you want to terminate this job?')">Stop it?</a>)
     </p>
     {% if job.back_url %}
         <p><a href="{{ job.back_url }}">Click here to launch another job.</a></p>

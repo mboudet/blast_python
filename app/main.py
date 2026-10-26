@@ -329,7 +329,7 @@ async def submit(
 
 
 # --------------------------------------------------------------------------
-# Job status / results / kill / history
+# Job status / results
 # --------------------------------------------------------------------------
 
 def _get_job(db: Session, uid: str):
@@ -363,15 +363,13 @@ def job_status(request: Request, uid: str, db: Session = Depends(get_db)):
     if scheduler.is_finished(job):
         return RedirectResponse(f"{settings.base_url_path}/job/results/{job.job_uid}")
     return _render(request, "status.html", {
-            "request": request,
-            "static_url": lambda p: _static_url(request, p),
-            "base_url_path": settings.base_url_path,
-            "job": job,
-            "status": text_status,
-            "status_js_url": f"{settings.base_url_path}/job/status/{job.job_uid}.js",
-            "kill_url": f"{settings.base_url_path}/job/kill/{job.job_uid}",
-        },
-    )
+        "request": request,
+        "static_url": lambda p: _static_url(request, p),
+        "base_url_path": settings.base_url_path,
+        "job": job,
+        "status": text_status,
+        "status_js_url": f"{settings.base_url_path}/job/status/{job.job_uid}.js",
+    })
 
 
 def _close_tags(html: str) -> str:
@@ -436,58 +434,17 @@ def job_results(request: Request, uid: str, db: Session = Depends(get_db)):
     preview_results, crashed, truncated = _extract_preview(html_file)
 
     return _render(request, "results.html", {
-            "request": request,
-            "static_url": lambda p: _static_url(request, p),
-            "base_url_path": settings.base_url_path,
-            "job": job,
-            "status": text_status,
-            "result_url": result_url,
-            "blast_crashed": crashed,
-            "preview_results": preview_results,
-            "truncated_preview": truncated,
-            "back_url": job.back_url,
-        },
-    )
-
-
-@app.get("/job/kill/{uid}", response_class=HTMLResponse)
-def job_kill(request: Request, uid: str, db: Session = Depends(get_db)):
-    job = _get_job(db, uid)
-    if not job or not job.scheduler_job_id:
-        return _render_error(request, uid, "Job %s is not available." % uid, job)
-    scheduler = get_scheduler()
-    if scheduler.is_finished(job):
-        return RedirectResponse(f"{settings.base_url_path}/job/results/{job.job_uid}")
-    success = scheduler.kill(job)
-    return _render(request, "kill.html", {
-            "request": request,
-            "static_url": lambda p: _static_url(request, p),
-            "base_url_path": settings.base_url_path,
-            "job": job,
-            "success": success,
-            "status_url": f"{settings.base_url_path}/job/status/{job.job_uid}",
-        },
-    )
-
-
-@app.get("/job/history", response_class=HTMLResponse)
-def job_history(request: Request, db: Session = Depends(get_db)):
-    jobs = db.query(Job).order_by(Job.created_at.desc()).limit(100).all()
-    scheduler = get_scheduler()
-    statuses = {}
-    for j in jobs:
-        statuses[j.job_uid] = (
-            scheduler.is_finished(j),
-            scheduler.get_status_as_text(scheduler.get_status(j)),
-        )
-    return _render(request, "history.html", {
-            "request": request,
-            "static_url": lambda p: _static_url(request, p),
-            "base_url_path": settings.base_url_path,
-            "jobs": jobs,
-            "statuses": statuses,
-        },
-    )
+        "request": request,
+        "static_url": lambda p: _static_url(request, p),
+        "base_url_path": settings.base_url_path,
+        "job": job,
+        "status": text_status,
+        "result_url": result_url,
+        "blast_crashed": crashed,
+        "preview_results": preview_results,
+        "truncated_preview": truncated,
+        "back_url": job.back_url,
+    })
 
 
 @app.get("/tmp/{program}/{uid}/{filename}")
@@ -505,15 +462,14 @@ def result_file(program: str, uid: str, filename: str, db: Session = Depends(get
 
 def _render_error(request: Request, uid: str, message: str, job=None):
     return _render(request, "error.html", {
-            "request": request,
-            "static_url": lambda p: _static_url(request, p),
-            "base_url_path": settings.base_url_path,
-            "uid": uid,
-            "error": message,
-            "job": job,
-        },
-        status_code=404,
-    )
+        "request": request,
+        "static_url": lambda p: _static_url(request, p),
+        "base_url_path": settings.base_url_path,
+        "uid": uid,
+        "error": message,
+        "job": job,
+    }, status_code=404)
+
 
 @app.on_event("startup")
 def startup() -> None:

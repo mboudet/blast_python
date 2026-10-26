@@ -60,12 +60,6 @@ def test_status_unknown_job(client):
     assert r.status_code == 404
 
 
-def test_history_empty(client):
-    c, _ = client
-    r = c.get("/job/history")
-    assert r.status_code == 200
-
-
 def test_result_file_served(client, db_session):
     c, fake = client
     r = _post(c)

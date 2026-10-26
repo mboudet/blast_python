@@ -7,7 +7,7 @@ submits jobs through either the DRMAA library or the Slurm REST API (JWT auth).
 ## Layout
 
 ```
-blast_new/
+blast_python/
 ├── app/
 │   ├── main.py          # FastAPI app, routes
 │   ├── config.py        # Settings (pydantic-settings)

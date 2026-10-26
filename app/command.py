@@ -65,9 +65,9 @@ def build_blast_command(
         parts.append(f"-word_size {request.wordSizesProt}")
 
     if (
-        request.program == "blastn"
-        and request.blastnType == "dc-megablast"
-        and int(request.templateLengths) != 0
+        request.program == "blastn" and
+        request.blastnType == "dc-megablast" and
+        int(request.templateLengths) != 0
     ):
         parts.append(f"-template_length {request.templateLengths}")
         parts.append(f"-template_type {request.templateTypes}")
