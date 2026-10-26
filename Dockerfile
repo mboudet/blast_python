@@ -8,14 +8,6 @@ RUN pip install --no-cache-dir --wheel-dir=/wheels -r /requirements.txt
 # ---- Runtime stage ----
 FROM python:3.13-slim
 
-# BLAST binaries needed by the jobs launched by the server.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-        ncbi-blast+ \
-        procps \
-        ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /srv/blast
 
 # Copy the installed wheels.
