@@ -342,8 +342,8 @@ def job_status_js(uid: str, db: Session = Depends(get_db)):
     if not job or not job.scheduler_job_id:
         return JSONResponse({"status": "unknown", "shouldRedirect": False, "resultsUrl": ""})
     scheduler = get_scheduler()
-    text_status = scheduler.get_status_as_text(scheduler.get_status(job))
-    is_finished = scheduler.is_finished(job)
+    text_status = scheduler.get_status_as_text(scheduler.get_status(job, db=db))
+    is_finished = scheduler.is_finished(job, db=db)
     return JSONResponse(
         {
             "status": text_status,
@@ -359,8 +359,8 @@ def job_status(request: Request, uid: str, db: Session = Depends(get_db)):
     if not job or not job.scheduler_job_id:
         return _render_error(request, uid, "Job %s is not available." % uid, job)
     scheduler = get_scheduler()
-    text_status = scheduler.get_status_as_text(scheduler.get_status(job))
-    if scheduler.is_finished(job):
+    text_status = scheduler.get_status_as_text(scheduler.get_status(job, db=db))
+    if scheduler.is_finished(job, db=db):
         return RedirectResponse(f"{settings.base_url_path}/job/results/{job.job_uid}")
     return _render(request, "status.html", {
         "request": request,
@@ -420,9 +420,9 @@ def job_results(request: Request, uid: str, db: Session = Depends(get_db)):
     if not job or not job.scheduler_job_id:
         return _render_error(request, uid, "Job %s is not available." % uid, job)
     scheduler = get_scheduler()
-    if not scheduler.is_finished(job):
+    if not scheduler.is_finished(job, db=db):
         return RedirectResponse(f"{settings.base_url_path}/job/status/{job.job_uid}")
-    text_status = scheduler.get_status_as_text(scheduler.get_status(job))
+    text_status = scheduler.get_status_as_text(scheduler.get_status(job, db=db))
     result_url = scheduler.get_result_url(job)
 
     work_dir = scheduler.get_work_dir(job)

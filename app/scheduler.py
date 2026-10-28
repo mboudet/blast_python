@@ -10,6 +10,7 @@ application.
 """
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
 
 from .config import get_settings
@@ -22,13 +23,13 @@ class Scheduler:
     def execute(self, job: Job) -> Job:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    def get_status(self, job: Job):  # pragma: no cover - abstract
+    def get_status(self, job: Job, db=None):  # pragma: no cover - abstract
         raise NotImplementedError
 
     def get_status_as_text(self, status) -> str:
         raise NotImplementedError
 
-    def is_finished(self, job: Job) -> bool:
+    def is_finished(self, job: Job, db=None) -> bool:
         return False
 
     def get_work_dir(self, job: Job) -> str:
@@ -155,7 +156,7 @@ class DrmaaScheduler(Scheduler):
             session.exit()
         return int(code)
 
-    def get_status(self, job: Job):
+    def get_status(self, job: Job, db=None):
         return self._status_code(job)
 
     def get_status_as_text(self, status) -> str:
@@ -163,7 +164,7 @@ class DrmaaScheduler(Scheduler):
             return self.TEXT_STATES[self.STATE_FINISHED]
         return self.TEXT_STATES.get(status, "unknown")
 
-    def is_finished(self, job: Job) -> bool:
+    def is_finished(self, job: Job, db=None) -> bool:
         status = self.get_status(job)
         return status in (self.STATE_UNDETERMINED, self.STATE_FINISHED, self.STATE_FAILED)
 
@@ -191,7 +192,7 @@ class SlurmScheduler(Scheduler):
         return f"{self.base}/slurm/{self.version}/{path}"
 
     def _dburl(self, path: str) -> str:
-        return f"{self.base}/slurm/{self.version}/{path}"
+        return f"{self.base}/slurmdb/{self.version}/{path}"
 
     def execute(self, job: Job) -> Job:
         settings = get_settings()
@@ -248,23 +249,77 @@ class SlurmScheduler(Scheduler):
         job.scheduler_job_id = str(job_id)
         return job
 
-    def get_status(self, job: Job):
+    def get_status(self, job: Job, db=None):
         if not job.scheduler_job_id:
             return "UNKNOWN"
+        # Serve a terminal state stored in the database instead of polling the
+        # scheduler for this job ID again.
+        if job.scheduler_status:
+            return job.scheduler_status
+
+        use_db = self._should_use_db(job)
         try:
-            resp = self._httpx.get(
-                self._url(f"job/{job.scheduler_job_id}"),
-                headers=self.headers,
-                verify=self.verify,
-                timeout=30,
-            )
-            resp.raise_for_status()
-            jobs = resp.json().get("jobs") or []
-            if not jobs:
-                return "UNKNOWN"
-            return jobs[0].get("job_state", "UNKNOWN")
+            data = self._query_status(job, use_db)
         except Exception:
             return "UNKNOWN"
+
+        # The /slurm/ endpoint only knows active jobs. If it reports an invalid
+        # job id (e.g. the job has left the live scheduler), fall back to the
+        # slurmdb endpoint.
+        if data.get("errors") and not use_db:
+            use_db = True
+            try:
+                data = self._query_status(job, use_db)
+            except Exception:
+                return "UNKNOWN"
+
+        state = self._extract_state(data, use_db)
+        if state is None:
+            return "UNKNOWN"
+
+        if state.upper() in self.FINAL_STATES:
+            # Persist the terminal state and serve it from the DB from now on.
+            job.scheduler_status = state
+            if db is not None:
+                db.commit()
+        else:
+            job.last_active_at = datetime.utcnow()
+            if db is not None:
+                db.commit()
+        return state
+
+    def _query_status(self, job: Job, use_db: bool):
+        url = (
+            self._dburl(f"job/{job.scheduler_job_id}")
+            if use_db
+            else self._url(f"job/{job.scheduler_job_id}")
+        )
+        resp = self._httpx.get(
+            url,
+            headers=self.headers,
+            verify=self.verify,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+    @staticmethod
+    def _extract_state(data, use_db: bool):
+        jobs = data.get("jobs") or []
+        if not jobs:
+            return None
+        job = jobs[0]
+        if use_db:
+            return job.get("state", {}).get("current", [None])[0]
+        return job.get("job_state", [None])[0]
+
+    def _should_use_db(self, job: Job) -> bool:
+        last_active = job.last_active_at
+        if last_active is None:
+            return False
+        settings = get_settings()
+        age = (datetime.utcnow() - last_active).total_seconds()
+        return age > settings.slurm_inactive_timeout
 
     def get_status_as_text(self, status) -> str:
         s = (status or "").upper()
@@ -284,8 +339,8 @@ class SlurmScheduler(Scheduler):
             return "failed"
         return "unknown"
 
-    def is_finished(self, job: Job) -> bool:
-        status = self.get_status(job)
+    def is_finished(self, job: Job, db=None) -> bool:
+        status = self.get_status(job, db=db)
         return status.upper() in self.FINAL_STATES or status.upper() == "UNKNOWN" and bool(job.scheduler_job_id)
 
 

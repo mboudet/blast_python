@@ -34,13 +34,13 @@ class FakeScheduler:
         job.scheduler_job_id = self.job_id
         return job
 
-    def get_status(self, job):
+    def get_status(self, job, db=None):
         return "COMPLETED" if self.finished else "PENDING"
 
     def get_status_as_text(self, status):
         return "finished" if self.finished else "waiting"
 
-    def is_finished(self, job):
+    def is_finished(self, job, db=None):
         return self.finished
 
     def kill(self, job):

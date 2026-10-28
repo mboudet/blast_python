@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     slurm_qos: str = ""
     slurm_account: str = ""
     slurm_native: str = ""         # extra sbatch option string
+    # Once a job has been inactive for longer than this many seconds, poll the
+    # slurmdb endpoint instead of the (live-cluster) slurm endpoint.
+    slurm_inactive_timeout: int = 600
 
     # --- Jobs ---------------------------------------------------------------
     jobs_method: str = "slurm"     # only "slurm" is supported in this rewrite

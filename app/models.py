@@ -18,6 +18,11 @@ class Job(Base):
 
     job_uid: Mapped[str] = mapped_column(String(255), primary_key=True)
     scheduler_job_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Terminal scheduler state for finished jobs, stored so the status can be
+    # served from the database once the job has left the live scheduler.
+    scheduler_status: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Last time the job was observed in an active (non-terminal) state.
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     user_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     command: Mapped[str] = mapped_column(Text)
     program_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
