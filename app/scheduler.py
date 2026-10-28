@@ -211,8 +211,6 @@ class SlurmScheduler(Scheduler):
         work_dir = self.get_work_dir(job)
 
         script = self.build_job_script(job, work_dir, lock_file="")
-        job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
-        os.chmod(job_file, 0o755)
 
         # Copy bin folder also
         base_dir = Path(__file__).resolve().parent.parent
@@ -238,7 +236,9 @@ class SlurmScheduler(Scheduler):
             sbatch.append(f"#SBATCH {settings.slurm_native}")
         full_script = "\n".join(sbatch + [script])
 
-        Path(job_file).write_text(script)
+        job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
+        Path(job_file).write_text(full_script)
+        os.chmod(job_file, 0o755)
 
         description = {
             "name": job.program_name,
