@@ -226,14 +226,6 @@ class SlurmScheduler(Scheduler):
         shutil.copy2(settings.links_config, bin_dir / "links.yml")
 
         sbatch = ["#!/bin/bash"]
-        if settings.slurm_partition:
-            sbatch.append(f"#SBATCH --partition={settings.slurm_partition}")
-        if settings.slurm_qos:
-            sbatch.append(f"#SBATCH --qos={settings.slurm_qos}")
-        if settings.slurm_account:
-            sbatch.append(f"#SBATCH --account={settings.slurm_account}")
-        if settings.slurm_native:
-            sbatch.append(f"#SBATCH {settings.slurm_native}")
         full_script = "\n".join(sbatch + [script])
 
         job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
@@ -246,6 +238,13 @@ class SlurmScheduler(Scheduler):
             "environment": ["PATH=/usr/local/bin:/usr/bin:/bin"],
             "current_working_directory": work_dir,
         }
+
+        if settings.slurm_partition:
+            description['partition'] = settings.slurm_partition
+        if settings.slurm_qos:
+            description['qos'] = settings.slurm_qos
+        if settings.slurm_account:
+            description['account'] = settings.slurm_account
 
         resp = self._httpx.post(
             self._url("job/submit"),
