@@ -67,7 +67,7 @@
         <tr><th>Select a personal databank (FASTA format)</th><td><input type="file" name="persoBankFile" id="persoBankFile" />
           <br />File size is limited to 20Mb{{ err('persoBankFile') }}</td></tr>
         <tr><th>Databank</th><td>
-          <select name="dbPath" id="blast_dbPath">{{ err('dbPath') }}</select>
+          <select name="dbPath" id="dbPath">{{ err('dbPath') }}</select>
           <img id="dbPath_loader" class="dbpath_loader" src="{{ static_url('images/loader_small.gif') }}" width="16" height="16" alt="Please wait while loading the databank list" title="Please wait while loading the databank list" /></td></tr>
         <tr><th>Databank genetic code</th><td>{{ select('dbCode', genetic_codes, values) }}{{ err('dbCode') }}</td></tr>
       </table>
