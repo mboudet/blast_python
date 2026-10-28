@@ -59,8 +59,8 @@ class Settings(BaseSettings):
     cdd_delta_path: str = ""
     pre_command: str = ""
     link_command: str = (
-        f"python3 {PROJECT_DIR / 'bin' / 'blast_links.py'} "
-        "--config {config} --gff-url $GFF3_URL"
+        "python3  ./bin/blast_links.py"
+        "--config ./bin/links.yml --gff-url $GFF3_URL"
     )
 
     # --- Blast databank -----------------------------------------------------

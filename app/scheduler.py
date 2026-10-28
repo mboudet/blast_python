@@ -9,6 +9,7 @@ Both share the same job script / working-directory conventions as the legacy
 application.
 """
 import os
+import shutil
 from pathlib import Path
 
 from .config import get_settings
@@ -32,7 +33,7 @@ class Scheduler:
 
     def get_work_dir(self, job: Job) -> str:
         settings = get_settings()
-        work_dir = os.path.join(settings.jobs_work_dir, job.program_name, job.job_uid)
+        work_dir = os.path.join(settings.jobs_work_dir, job.program_name, job.job_uid) + "/"
         Path(work_dir).mkdir(parents=True, exist_ok=True)
         return work_dir
 
@@ -53,8 +54,8 @@ class Scheduler:
             )
 
         lines = ["#!/bin/bash"]
-        lines.append(f"exec 3> {work_dir}stdout.txt")
-        lines.append(f"exec 4> {work_dir}stderr.txt")
+        lines.append(f"exec 3> {work_dir}/stdout.txt")
+        lines.append(f"exec 4> {work_dir}/stderr.txt")
         lines.append("(")
         lines.append(f"    if [ ! -d {work_dir} ]")
         lines.append("    then")
@@ -112,6 +113,19 @@ class DrmaaScheduler(Scheduler):
         job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
         Path(job_file).write_text(script)
         os.chmod(job_file, 0o755)
+
+        # Copy bin folder also
+        base_dir = Path(__file__).resolve().parent.parent
+        src_dir = base_dir / "bin"
+
+        bin_dir = os.path.join(work_dir, "bin")
+        Path(bin_dir).mkdir(parents=True, exist_ok=True)
+        for item in src_dir.iterdir():
+            if item.is_file():
+                shutil.copy2(item, bin_dir / item.name)
+                os.chmod(bin_dir / item.name, 0o755)
+        # Also add the 'links.yml' file
+        shutil.copy2(settings.links_config, bin_dir / "links.yml")
 
         session = drmaa.Session()
         try:
@@ -176,6 +190,9 @@ class SlurmScheduler(Scheduler):
     def _url(self, path: str) -> str:
         return f"{self.base}/slurm/{self.version}/{path}"
 
+    def _dburl(self, path: str) -> str:
+        return f"{self.base}/slurm/{self.version}/{path}"
+
     def execute(self, job: Job) -> Job:
         settings = get_settings()
         work_dir = self.get_work_dir(job)
@@ -184,6 +201,19 @@ class SlurmScheduler(Scheduler):
         job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
         Path(job_file).write_text(script)
         os.chmod(job_file, 0o755)
+
+        # Copy bin folder also
+        base_dir = Path(__file__).resolve().parent.parent
+        src_dir = base_dir / "bin"
+
+        bin_dir = os.path.join(work_dir, "bin")
+        Path(bin_dir).mkdir(parents=True, exist_ok=True)
+        for item in src_dir.iterdir():
+            if item.is_file():
+                shutil.copy2(item, bin_dir / item.name)
+                os.chmod(bin_dir / item.name, 0o755)
+        # Also add the 'links.yml' file
+        shutil.copy2(settings.links_config, bin_dir / "links.yml")
 
         sbatch = []
         if settings.slurm_partition:
