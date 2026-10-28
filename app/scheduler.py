@@ -54,7 +54,7 @@ class Scheduler:
                 f'-r "{settings.admin_email}" "{job.email}" < "{body_file}"'
             )
 
-        lines = ["#!/bin/bash"]
+        lines = []
         lines.append(f"exec 3> {work_dir}/stdout.txt")
         lines.append(f"exec 4> {work_dir}/stderr.txt")
         lines.append("(")
@@ -112,15 +112,27 @@ class DrmaaScheduler(Scheduler):
 
         script = self.build_job_script(job, work_dir, lock_file="")
         job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
-        Path(job_file).write_text(script)
+
+        sbatch = ["#!/bin/bash"]
+        if settings.slurm_partition:
+            sbatch.append(f"#SBATCH --partition={settings.slurm_partition}")
+        if settings.slurm_qos:
+            sbatch.append(f"#SBATCH --qos={settings.slurm_qos}")
+        if settings.slurm_account:
+            sbatch.append(f"#SBATCH --account={settings.slurm_account}")
+        if settings.slurm_native:
+            sbatch.append(f"#SBATCH {settings.slurm_native}")
+        full_script = "\n".join(sbatch + [script])
+
+        Path(job_file).write_text(full_script)
         os.chmod(job_file, 0o755)
 
         # Copy bin folder also
         base_dir = Path(__file__).resolve().parent.parent
         src_dir = base_dir / "bin"
 
-        bin_dir = os.path.join(work_dir, "bin")
-        Path(bin_dir).mkdir(parents=True, exist_ok=True)
+        bin_dir = Path(os.path.join(work_dir, "bin"))
+        bin_dir.mkdir(parents=True, exist_ok=True)
         for item in src_dir.iterdir():
             if item.is_file():
                 shutil.copy2(item, bin_dir / item.name)
@@ -200,15 +212,14 @@ class SlurmScheduler(Scheduler):
 
         script = self.build_job_script(job, work_dir, lock_file="")
         job_file = os.path.join(work_dir, f"{job.job_uid}.sh")
-        Path(job_file).write_text(script)
         os.chmod(job_file, 0o755)
 
         # Copy bin folder also
         base_dir = Path(__file__).resolve().parent.parent
         src_dir = base_dir / "bin"
 
-        bin_dir = os.path.join(work_dir, "bin")
-        Path(bin_dir).mkdir(parents=True, exist_ok=True)
+        bin_dir = Path(os.path.join(work_dir, "bin"))
+        bin_dir.mkdir(parents=True, exist_ok=True)
         for item in src_dir.iterdir():
             if item.is_file():
                 shutil.copy2(item, bin_dir / item.name)
@@ -216,7 +227,7 @@ class SlurmScheduler(Scheduler):
         # Also add the 'links.yml' file
         shutil.copy2(settings.links_config, bin_dir / "links.yml")
 
-        sbatch = []
+        sbatch = ["#!/bin/bash"]
         if settings.slurm_partition:
             sbatch.append(f"#SBATCH --partition={settings.slurm_partition}")
         if settings.slurm_qos:
@@ -226,6 +237,8 @@ class SlurmScheduler(Scheduler):
         if settings.slurm_native:
             sbatch.append(f"#SBATCH {settings.slurm_native}")
         full_script = "\n".join(sbatch + [script])
+
+        Path(job_file).write_text(script)
 
         description = {
             "name": job.program_name,
