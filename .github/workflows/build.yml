@@ -2,7 +2,7 @@ name: Build and Push image
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main" ]
 
 permissions:
   contents: read
