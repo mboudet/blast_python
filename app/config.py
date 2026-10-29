@@ -26,6 +26,20 @@ class Settings(BaseSettings):
     secret_key: str = "change-me"
     upload_limit: int = 100  # MiB
 
+    # Optional directory mounted into the container that is searched *before*
+    # the built-in templates. Drop a custom ``layout.html`` (and any other
+    # template) there to override the default rendering.
+    templates_override_dir: str = ""
+
+    # Optional directory mounted into the container that serves custom static
+    # assets (css, images, ...) at ``{base_url_path}/static/custom/``.
+    static_override_dir: str = ""
+
+    # Optional extra stylesheet, either a full URL or a filename relative to
+    # ``static_override_dir`` (e.g. "custom.css" -> /static/custom/custom.css).
+    # When set it is linked from the layout's <head>.
+    custom_css: str = ""
+
     # --- Database ----------------------------------------------------------
     # Either a full SQLAlchemy URL (sqlite:///..., postgresql://..., mysql://...)
     # or leave empty to build one from the DB_* variables below.

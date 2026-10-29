@@ -60,6 +60,39 @@ The image installs the NCBI BLAST tools (needed to run the jobs) alongside the
 FastAPI server. See `docker-compose.yml` for the env vars; the Slurm JWT can be
 mounted as a secret via `SLURM_JWT_FILE`.
 
+### Overriding templates / custom CSS
+
+Mount a directory with your own templates and/or static assets (no image
+rebuild needed):
+
+- `TEMPLATES_OVERRIDE_DIR`: a directory searched *before* the built-in
+  templates. Drop a custom `layout.html` (or any other template) there.
+- `STATIC_OVERRIDE_DIR`: a directory served at `/static/custom/` for custom
+  css/images.
+- `CUSTOM_CSS`: a full URL, an absolute path, or a filename relative to
+  `STATIC_OVERRIDE_DIR` (e.g. `custom.css`) that is linked from the layout's
+  `<head>`.
+
+In `docker-compose.yml`, uncomment the `override` volumes and adjust the paths:
+
+```yaml
+    volumes:
+      - ./override/templates:/srv/blast/override/templates:ro
+      - ./override/static:/srv/blast/override/static:ro
+    environment:
+      TEMPLATES_OVERRIDE_DIR: /srv/blast/override/templates
+      STATIC_OVERRIDE_DIR: /srv/blast/override/static
+      CUSTOM_CSS: custom.css
+```
+
+### Rotating the Slurm JWT
+
+Point `SLURM_JWT_FILE` at a file containing the token. The application reads it
+from disk on *every* request to the Slurm REST API (rather than caching it in
+memory), so you can rotate the token simply by replacing the contents of that
+file — no restart required. Mounting it as a docker secret
+(`/run/secrets/slurm_jwt`) works the same way.
+
 At launch, `/entrypoint.sh` creates a user/group from the `UID`/`GID` env vars
 (names `APP_USER`/`APP_GROUP`, default `blast`) and then drops privileges to run
 uvicorn as that user. This mirrors `docker-sf-blast`: jobs are submitted (DRMAA)

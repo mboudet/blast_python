@@ -195,10 +195,17 @@ class SlurmScheduler(Scheduler):
         self.version = settings.slurm_api_version
         self.verify = settings.slurm_verify_tls
         self.headers = {}
-        if settings.slurm_token:
-            self.headers["X-SLURM-USER-TOKEN"] = settings.slurm_token
         if settings.slurm_user:
             self.headers["X-SLURM-USER-NAME"] = settings.slurm_user
+
+    def _headers(self) -> dict:
+        # Read the JWT on every call so a rotated token file is picked up
+        # without restarting the server (the file is not cached in memory).
+        headers = dict(self.headers)
+        token = get_settings().slurm_token
+        if token:
+            headers["X-SLURM-USER-TOKEN"] = token
+        return headers
 
     def _url(self, path: str) -> str:
         return f"{self.base}/slurm/{self.version}/{path}"
@@ -249,7 +256,7 @@ class SlurmScheduler(Scheduler):
         resp = self._httpx.post(
             self._url("job/submit"),
             json={"job": description},
-            headers=self.headers,
+            headers=self._headers(),
             verify=self.verify,
             timeout=60,
         )
@@ -308,7 +315,7 @@ class SlurmScheduler(Scheduler):
         )
         resp = self._httpx.get(
             url,
-            headers=self.headers,
+            headers=self._headers(),
             verify=self.verify,
             timeout=30,
         )

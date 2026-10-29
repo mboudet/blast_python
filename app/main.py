@@ -30,8 +30,36 @@ APP_DIR = Path(__file__).resolve().parent
 settings = get_settings()
 
 app = FastAPI(title=settings.app_title)
-templates = Jinja2Templates(directory=str(APP_DIR / "templates"))
-app.mount("/static", StaticFiles(directory=str(APP_DIR / "static")), name="static")
+
+# Template lookup: an optional override directory (e.g. mounted from a volume)
+# is searched *before* the built-in templates, so a custom ``layout.html`` (and
+# any other template) can be provided without rebuilding the image.
+templates_dirs = [str(APP_DIR / "templates")]
+if settings.templates_override_dir and Path(settings.templates_override_dir).is_dir():
+    templates_dirs.insert(0, settings.templates_override_dir)
+templates = Jinja2Templates(directory=templates_dirs)
+
+# Custom static assets (css, images, ...) are served from ``/static/custom/``
+# and registered before the built-in mount so they are matched first. Only
+# mount if the directory actually exists (e.g. a mounted volume).
+if settings.static_override_dir and Path(settings.static_override_dir).is_dir():
+    app.mount(
+        f"{settings.base_url_path}/static/custom",
+        StaticFiles(directory=settings.static_override_dir),
+        name="custom-static",
+    )
+app.mount(
+    f"{settings.base_url_path}/static",
+    StaticFiles(directory=str(APP_DIR / "static")),
+    name="static",
+)
+
+# Expose the optional custom stylesheet to the layout template. It may be a
+# full URL, an absolute path, or a filename relative to the static override dir.
+_custom_css = settings.custom_css
+if _custom_css and not _custom_css.startswith(("http://", "https://", "/")):
+    _custom_css = f"{settings.base_url_path}/static/custom/{_custom_css.lstrip('/')}"
+templates.env.globals["custom_css"] = _custom_css
 
 db_provider = load_db_provider(settings.banks_config)
 

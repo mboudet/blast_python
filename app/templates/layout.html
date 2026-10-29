@@ -5,6 +5,7 @@
         <script type="text/javascript" src="{{ static_url('js/jquery-3.7.1.min.js') }}"></script>
         <script type="text/javascript" src="{{ static_url('js/scheduler.js') }}"></script>
         <link href="{{ static_url('css/scheduler.css') }}" rel="stylesheet" type="text/css" media="screen" />
+        {% if custom_css %}<link href="{{ custom_css }}" rel="stylesheet" type="text/css" media="screen" />{% endif %}
         {% block head %}{% endblock %}
     </head>
     <body>

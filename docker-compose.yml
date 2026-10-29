@@ -23,6 +23,12 @@ services:
       SLURM_QOS:
       SLURM_ACCOUNT:
       SLURM_NATIVE:
+      # Custom templates / static overrides (see the volumes below). Provide a
+      # custom layout.html and/or a custom stylesheet without rebuilding the
+      # image. Example values (keep empty unless you mount the dirs):
+      TEMPLATES_OVERRIDE_DIR: /srv/blast/override/templates
+      STATIC_OVERRIDE_DIR: /srv/blast/override/static
+      CUSTOM_CSS: custom.css
       JOBS_WORK_DIR: /tmp/
       JOBS_SCHED_NAME: blast
       CDD_DELTA_PATH:
@@ -38,6 +44,11 @@ services:
     volumes:
       - ./config/banks.yml:/srv/blast/config/banks.yml:ro
       - ./config/links.yml:/srv/blast/config/links.yml:ro
+      # Optional overrides: mount a directory with a custom layout.html and/or
+      # a custom stylesheet. See TEMPLATES_OVERRIDE_DIR / STATIC_OVERRIDE_DIR /
+      # CUSTOM_CSS above. Uncomment to enable:
+      # - ./override/templates:/srv/blast/override/templates:ro
+      # - ./override/static:/srv/blast/override/static:ro
     secrets:
       - slurm_jwt
 
