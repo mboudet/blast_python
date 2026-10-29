@@ -44,12 +44,12 @@ templates = Jinja2Templates(directory=templates_dirs)
 # mount if the directory actually exists (e.g. a mounted volume).
 if settings.static_override_dir and Path(settings.static_override_dir).is_dir():
     app.mount(
-        f"{settings.base_url_path}/static/custom",
+        "/static/custom",
         StaticFiles(directory=settings.static_override_dir),
         name="custom-static",
     )
 app.mount(
-    f"{settings.base_url_path}/static",
+    "/static",
     StaticFiles(directory=str(APP_DIR / "static")),
     name="static",
 )
