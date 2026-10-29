@@ -1,0 +1,86 @@
+/*
+ * Copyright 2011 Anthony Bretaudeau <abretaud@irisa.fr>
+ *
+ * Licensed under the CeCILL License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.cecill.info/licences/Licence_CeCILL_V2-en.txt
+ *
+ */
+ 
+tr.headFields td {
+    border: 0;
+}
+
+tr.headFields td.emailField {
+    text-align: right;
+}
+
+form#blast table {
+    width: 80%;
+    margin-top: 0;
+    margin-bottom: 1em;
+}
+
+form#blast th {
+    width: 20%;
+}
+
+form#blast p.formPart {
+    width:80%;
+    margin-left:auto;
+    margin-right:auto;
+    padding:0;
+    padding-left: 5px;
+    text-align:left;
+    font-style:italic;
+    font-weight:bold;
+    color: #32639A;
+}
+
+form#blast p.formPart img {
+    vertical-align:middle;
+}
+
+em {
+    font-style: italic;
+}
+strong {
+    font-weight: bold;
+}
+
+form, fieldset {
+    margin-top: 2em;
+    margin-bottom: 2em;
+    margin-left:auto;
+    margin-right:auto;
+    padding: 1em;
+    text-align:center;
+}
+
+input, button, select {
+    vertical-align: middle;
+}
+
+table {
+    margin: 0;
+    border: 1px solid #ddd;
+    border-collapse: collapse;
+    border-spacing: 0;
+    background-color:#eeeeee;
+    margin-left:auto;
+    margin-right:auto;
+}
+table td, table th {
+    padding: 8px;
+    border: 1px solid #ddd;
+    vertical-align: top;
+    text-align: left;
+}
+
+img.dbpath_loader {
+    vertical-align:middle;
+    display: none;
+}
+

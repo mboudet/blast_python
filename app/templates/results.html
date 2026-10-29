@@ -1,0 +1,58 @@
+{% extends "layout.html" %}
+{% block scheduler %}
+<div class="jobGeneralInfo">
+  <h3>Your blast job {{ job.title or job.job_uid }} is finished.</h3>
+  {% if job.has_valid_email() %}
+    <p>An email has been sent to {{ job.email }}.</p>
+  {% endif %}
+  <div class="progressContainer">
+    <div class="progressBar" style="background-position: 1px 0;"></div>
+  </div>
+  {% if back_url %}
+    <p style="text-align:center;"><a href="{{ back_url }}">Click here to launch another job.</a></p>
+  {% endif %}
+</div>
+
+<div class="jobResults">
+    <h3>Results</h3>
+    <div class="viewers">
+        {% if blast_crashed %}
+          <p class="error">
+              Your job is finished but we could not find the blast output. This usually means Blast crashed. Check your request parameters, especially the format of your sequence(s) (or prosite pattern and PSSM if you are using PHI-BLAST or PSI-BLAST), and if the problem persists, contact the administrators of this website, with this reference: "{{ job.job_uid }}".
+          </p>
+        {% else %}
+            {{ preview_results | safe }}
+            {% if truncated_preview %}
+                {% for file in job.result_files | reverse %}
+                  {% if file.display_name == "HTML blast output" %}
+                    <p class='warn'>The result file is too long to be displayed here. Please click <a href="{{ result_url }}{{ file.fs_name }}">here</a> to see the full results.</p>
+                  {% endif %}
+                {% endfor %}
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+<div class="jobResults">
+  {% if job.has_result_viewers() %}
+    <div class="viewers">
+      <p>View the results online:</p>
+      <ul>
+      {% for viewer in job.result_viewers %}
+          <li><a href="{{ viewer.url }}">{{ viewer.display_name }}</a></li>
+      {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+  {% if job.has_result_files() %}
+    <div class="downloads">
+      <p>Download the result files:</p>
+      <ul>
+      {% for file in job.result_files %}
+          <li><a href="{{ result_url }}{{ file.fs_name }}">{{ file.display_name }}</a></li>
+      {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

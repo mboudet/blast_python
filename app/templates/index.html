@@ -1,0 +1,160 @@
+{% extends "layout.html" %}
+{% block head %}
+    {{ super() }}
+    <link href="{{ static_url('css/blast.css') }}" rel="stylesheet" type="text/css" media="screen" />
+
+{% endblock %}
+{% block title %}{{ main_title or 'Blast server' }}{% endblock %}
+
+{% block scheduler %}
+    {% macro select(name, options, values) -%}
+        <select name="{{ name }}" id="{{ name }}">
+        {% for item in options %}
+            {% if item is string %}{% set value, label = item, item %}{% else %}{% set value, label = item %}{% endif %}
+            <option value="{{ value }}"{% if values[name] == value|string %} selected="selected"{% endif %}>{{ label }}</option>
+        {% endfor %}
+        </select>
+    {%- endmacro %}
+
+    {% macro text(name, values, size=30) -%}
+        <input type="text" name="{{ name }}" id="{{ name }}" value="{{ values[name] }}" size="{{ size }}" />
+    {%- endmacro %}
+
+    {% macro number(name, values, size=6) -%}
+        <input type="number" name="{{ name }}" id="{{ name }}" value="{{ values[name] }}" size="{{ size }}" />
+    {%- endmacro %}
+
+    {% macro checkbox(name, values) -%}
+        <input type="checkbox" name="{{ name }}" id="{{ name }}"{% if values[name] %} checked="checked"{% endif %} />
+    {%- endmacro %}
+
+    {% macro err(field) -%}
+        {% if errors.get(field) %}<p class="error">{{ errors[field] }}</p>{% endif %}
+    {%- endmacro %}
+
+    {% if main_title %}<h1>{{ main_title }}</h1>{% endif %}
+
+    <form name="blast" action="{{ base_url_path }}/" method="post" id="blast" enctype="multipart/form-data">
+      <table>
+        <tr class="headFields">
+          <td title="Optional, give a title to this job (will be displayed in emails)">Job title {{ text('title', values) }}{{ err('title') }}</td>
+          <td class="emailField" title="Optional, if you want to receive the results by email">Email address {{ text('email', values) }}{{ err('email') }}</td>
+        </tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Program selection" /> Program selection</p>
+      <table>
+        <tr><th>Program</th><td>{{ select('program', programs, values) }}{{ err('program') }}</td></tr>
+        <tr><th>Search type</th><td>{{ select('blastnType', blastn_types, values) }}{{ err('blastnType') }}</td></tr>
+        <tr><th>Search type</th><td>{{ select('blastpType', blastp_types, values) }}
+          <br />PSI-BLAST, PHI-BLAST and DELTA-BLAST can be used to find distantly related sequences{{ err('blastpType') }}</td></tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Query sequence" /> Query sequence</p>
+      <table>
+        <tr><th>Paste your sequence</th><td>
+          <textarea name="pastedSeq" id="pastedSeq" cols="75" rows="7">{{ values['pastedSeq'] }}</textarea>
+          <br />FASTA format. Length is limited to 20Mb{{ err('pastedSeq') }}</td></tr>
+        <tr><th>Or select a file</th><td><input type="file" name="fileSeq" id="fileSeq" />
+          <br />FASTA format. File size is limited to 20Mb{{ err('fileSeq') }}</td></tr>
+        <tr><th>Query genetic code</th><td>{{ select('queryCode', genetic_codes, values) }}{{ err('queryCode') }}</td></tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Databank selection" /> Databank selection</p>
+      <table>
+        <tr><th>Databank type</th><td>{{ select('bankTypeNuc', bank_types, values) }}{{ err('bankTypeNuc') }}</td></tr>
+        <tr><th>Databank type</th><td>{{ select('bankTypeProt', bank_types, values) }}{{ err('bankTypeProt') }}</td></tr>
+        <tr><th>Select a personal databank (FASTA format)</th><td><input type="file" name="persoBankFile" id="persoBankFile" />
+          <br />File size is limited to 20Mb{{ err('persoBankFile') }}</td></tr>
+        <tr><th>Databank</th><td>
+          <select name="dbPath" id="dbPath">{{ err('dbPath') }}</select>
+          <img id="dbPath_loader" class="dbpath_loader" src="{{ static_url('images/loader_small.gif') }}" width="16" height="16" alt="Please wait while loading the databank list" title="Please wait while loading the databank list" /></td></tr>
+        <tr><th>Databank genetic code</th><td>{{ select('dbCode', genetic_codes, values) }}{{ err('dbCode') }}</td></tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="General parameters" /> General parameters</p>
+      <table>
+        <tr><th>Expect</th><td>{{ select('expect', expects, values) }}
+          <br />The statistical significance threshold for reporting matches. Lowest values are the most stringent.{{ err('expect') }}</td></tr>
+        <tr><th>Word size</th><td>{{ select('wordSizesProt', prot_word_sizes, values) }}
+          <br />The length of the seed that initiates an alignment.{{ err('wordSizesProt') }}</td></tr>
+        <tr><th>Word size</th><td>{{ select('wordSizesBlastn', blastn_word_sizes, values) }}
+          <br />The length of the seed that initiates an alignment.{{ err('wordSizesBlastn') }}</td></tr>
+        <tr><th>Word size</th><td>{{ select('wordSizesMegablast', megablast_word_sizes, values) }}
+          <br />The length of the seed that initiates an alignment.{{ err('wordSizesMegablast') }}</td></tr>
+        <tr><th>Word size</th><td>{{ select('wordSizesDcMegablast', dc_megablast_word_sizes, values) }}
+          <br />The length of the seed that initiates an alignment.{{ err('wordSizesDcMegablast') }}</td></tr>
+        <tr><th>Max target sequences</th><td>{{ select('maxTargetSequences', max_targets, values) }}
+          <br />Maximum number of aligned sequences to display{{ err('maxTargetSequences') }}</td></tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Scoring parameters" /> Scoring parameters</p>
+      <table>
+        <tr><th>Matrix</th><td>{{ select('matricesNuc', nuc_matrices, values) }}
+          <br />First number is the reward when two aligned nucleotides match.
+          <br />Second number is the penalty when two aligned nucleotides are different.{{ err('matricesNuc') }}</td></tr>
+        <tr><th>Matrix</th><td>{{ select('matricesMegablast', nuc_matrices, values) }}
+          <br />First number is the reward when two aligned nucleotides match.
+          <br />Second number is the penalty when two aligned nucleotides are different.{{ err('matricesMegablast') }}</td></tr>
+        <tr><th>Matrix</th><td>{{ select('matricesProt', prot_matrices, values) }}
+          <br />Substitution matrix for scoring any pair of residues.
+          <br />BLOSUM45 or PAM70 are for more divergent sequences. BLOSUM80 or PAM30 are for less divergent sequences.{{ err('matricesProt') }}</td></tr>
+        <tr><th>Gap costs</th><td>{{ select('gapCostsBlastn', blastn_gap_costs, values) }}
+          <br />Penalties when opening and extending a gap in each alignment.{{ err('gapCostsBlastn') }}</td></tr>
+        <tr><th>Gap costs</th><td>{{ select('gapCostsProt', prot_gap_costs, values) }}
+          <br />Penalties when opening and extending a gap in each alignment.{{ err('gapCostsProt') }}</td></tr>
+        <tr><th>Compositional adjustments</th><td>{{ select('compositionalAdjustments', compositional_adjustments, values) }}
+          <br />Matrix adjustment method to compensate for amino acid composition of sequences.{{ err('compositionalAdjustments') }}</td></tr>
+        <tr><th>Compositional adjustments</th><td>{{ select('compositionalAdjustmentsDelta', compositional_adjustments_delta, values) }}
+          <br />Matrix adjustment method to compensate for amino acid composition of sequences.{{ err('compositionalAdjustmentsDelta') }}</td></tr>
+      </table>
+
+      <p class="formPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Filters and masking" /> Filters and masking</p>
+      <table>
+        <tr><th>Low complexity regions</th><td>{{ checkbox('lowComplex', values) }}
+          <br />Mask off segments of the query sequence that have low compositional complexity.{{ err('lowComplex') }}</td></tr>
+        <tr><th>Soft masking</th><td>{{ checkbox('softMasking', values) }}
+          <br />Mask only when finding alignment seeds, not during extension.{{ err('softMasking') }}</td></tr>
+        <tr><th>Mask lower case letters</th><td>{{ checkbox('lowerCase', values) }}
+          <br />Filter regions in lower case in query sequence.{{ err('lowerCase') }}</td></tr>
+      </table>
+
+      <p class="formPart psiFormPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="PSI-BLAST and PHI-BLAST" /> PSI-BLAST and PHI-BLAST</p>
+      <table class="psiFormPart">
+        <tr><th>PSI-BLAST threshold</th><td>{{ number('psiThreshold', values) }}
+          <br />Set the statistical significance threshold to include a sequence in the model used by PSI-BLAST to create the PSSM on the next iteration. {{ err('psiThreshold') }}</td></tr>
+        <tr><th>DELTA-BLAST threshold</th><td>{{ number('deltaThreshold', values) }}
+          <br />Set the statistical significance threshold to include a domain in the model used by DELTA-BLAST to create the PSSM. {{ err('deltaThreshold') }}</td></tr>
+        <tr><th>Iteration number</th><td>{{ number('psiIterationNb', values) }}
+          <br />Number of iterations{{ err('psiIterationNb') }}</td></tr>
+        <tr><th>Pseudocount</th><td>{{ number('psiPseudoCount', values) }}
+          <br />If zero is specified, then the parameter is automatically determined through a minimum length description principle (PMID 19088134).{{ err('psiPseudoCount') }}</td></tr>
+        <tr><th>Upload PSSM</th><td><input type="file" name="psiPSSM" id="psiPSSM" />
+          <br />Upload a Position Specific Score Matrix (PSSM) that you previously downloaded from a PSI-BLAST iteration. You may search a different database than that used to generate the PSSM, but you must use the same query.{{ err('psiPSSM') }}</td></tr>
+        <tr><th>PHI-BLAST pattern</th><td><input type="file" name="phiPattern" id="phiPattern" />
+          <br />Enter a PHI pattern (PROSITE format) to start the search. PHI-BLAST may perform better than simple pattern searching because it filters out false positives (pattern matches that are probably random and not indicative of homology).{{ err('phiPattern') }}</td></tr>
+      </table>
+
+      <p class="formPart discontiguousFormPart"><img src="{{ static_url('images/item.png') }}" width=16 height=16 alt="Discontiguous Word Options" /> Discontiguous Word Options</p>
+      <table class="discontiguousFormPart">
+        <tr><th>Template length</th><td>{{ select('templateLengths', template_lengths, values) }}
+          <br />Total number of bases in a seed that ignores some positions. {{ err('templateLengths') }}</td></tr>
+        <tr><th>Template type</th><td>{{ select('templateTypes', template_types, values) }}
+          <br />Specifies which bases are ignored in scanning the database. {{ err('templateTypes') }}</td></tr>
+      </table>
+
+      <input type="submit" />
+    </form>
+
+    <script type="text/javascript">
+        //<![CDATA[
+        var nucleicBanks = {
+            {% for path, label in nucleic_banks.items() %}"{{ path }}": "{{ label }}"{% if not loop.last %},{% endif %}{% endfor %}
+        };
+        var proteicBanks = {
+            {% for path, label in proteic_banks.items() %}"{{ path }}": "{{ label }}"{% if not loop.last %},{% endif %}{% endfor %}
+        };
+        //]]>
+    </script>
+    <script type="text/javascript" src="{{ static_url('js/blast.js') }}"></script>
+{% endblock %}

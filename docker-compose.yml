@@ -1,0 +1,57 @@
+services:
+  blast:
+    build: .
+    image: blast-server:latest
+    ports:
+      - "8000:8000"
+    environment:
+      JOBS_METHOD: slurm
+      # Create/run as a user with the provided uid/gid (shared with the compute
+      # nodes so jobs run under the same user). Leave empty for defaults.
+      UID:
+      GID:
+      APP_USER: blast
+      APP_GROUP: blast
+      # Submit jobs as the same user (X-SLURM-USER-NAME impersonation; the
+      # SLURM_JWT token must belong to a user with SlurmUser/admin rights).
+      SLURM_USER: blast
+      SLURM_REST_URL: http://slurmctld:6820
+      SLURM_API_VERSION: v0.0.40
+      SLURM_JWT_FILE: /run/secrets/slurm_jwt
+      # SLURM_JWT: <your token>   (or mount a token file and set SLURM_JWT_FILE)
+      SLURM_PARTITION:
+      SLURM_QOS:
+      SLURM_ACCOUNT:
+      SLURM_NATIVE:
+      # Custom templates / static overrides (see the volumes below). Provide a
+      # custom layout.html and/or a custom stylesheet without rebuilding the
+      # image. Example values (keep empty unless you mount the dirs):
+      TEMPLATES_OVERRIDE_DIR: /srv/blast/override/templates
+      STATIC_OVERRIDE_DIR: /srv/blast/override/static
+      CUSTOM_CSS: custom.css
+      JOBS_WORK_DIR: /tmp/
+      JOBS_SCHED_NAME: blast
+      CDD_DELTA_PATH:
+      PRE_CMD:
+      # DATABASE_URL: sqlite:////srv/blast/blast.db
+      ADMIN_EMAIL: admin@blast-server
+      ADMIN_NAME: Blast admin
+      SMTP_HOST:
+      SMTP_PORT: "25"
+      SMTP_USER:
+      SMTP_PASS:
+      SMTP_USE_TLS: "false"
+    volumes:
+      - ./config/banks.yml:/srv/blast/config/banks.yml:ro
+      - ./config/links.yml:/srv/blast/config/links.yml:ro
+      # Optional overrides: mount a directory with a custom layout.html and/or
+      # a custom stylesheet. See TEMPLATES_OVERRIDE_DIR / STATIC_OVERRIDE_DIR /
+      # CUSTOM_CSS above. Uncomment to enable:
+      # - ./override/templates:/srv/blast/override/templates:ro
+      # - ./override/static:/srv/blast/override/static:ro
+    secrets:
+      - slurm_jwt
+
+secrets:
+  slurm_jwt:
+    file: ./slurm.jwt
