@@ -3,11 +3,11 @@
 # A script to add links to blast results (HTML file)
 
 import argparse
+import html
 import os
 import sys
 import re
 import yaml
-import yamlordereddictloader
 
 
 class LinkInjector():
@@ -60,7 +60,10 @@ class LinkInjector():
         if self.args.config:
             conf_file = self.args.config
 
-        y = yaml.load(open(conf_file), Loader=yamlordereddictloader.Loader)
+        # safe_load: the unsafe loader can instantiate arbitrary Python objects.
+        # Plain dicts keep the document order (Python >= 3.7).
+        with open(conf_file) as fh:
+            y = yaml.safe_load(fh)
 
         if y:
             for conf_cat in y.values():
@@ -73,7 +76,7 @@ class LinkInjector():
                 for regex in conf_cat:
                     if regex != 'db':  # skip db line
                         url = conf_cat[regex]
-                        url.replace('{gff_url}', self.args.gff_url)
+                        url = url.replace('{gff_url}', self.args.gff_url or '')
                         if regex == '*':  # Add a default regex
                             regex = r'([\w.-]+)'
                         if not regex.startswith('^'):  # Add the seq id prefix rule (e.g. 'lcl|' or '>lcl|', ...)
@@ -170,8 +173,10 @@ class LinkInjector():
             if re.match(rule[0], db):
                 id_search = re.search(rule[1], line)
                 if id_search:
-                    seq_id = id_search.group(2)
-                    clean_link = rule[2].replace('{db}', db)
+                    # Sequence ids and db names come from blast output, which
+                    # contains user-supplied text: escape before injecting HTML.
+                    seq_id = html.escape(id_search.group(2) or '', quote=True)
+                    clean_link = rule[2].replace('{db}', html.escape(db, quote=True))
                     clean_link = clean_link.replace('{id}', seq_id)
                     clean_link = clean_link.replace('{jbrowse_track}', jbrowse_track)
                     clean_link = clean_link.replace('{apollo_track}', apollo_track)

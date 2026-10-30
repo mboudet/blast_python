@@ -5,10 +5,52 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from . import forms
 
-EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+# Conservative address check: the first character must be alphanumeric (so the
+# value can never be read as a command-line option) and shell metacharacters
+# (quotes, $, backticks, ;, |, &, parentheses, ...) are rejected outright.
+EMAIL_RE = re.compile(
+    r"^[A-Za-z0-9_%+][A-Za-z0-9._%+-]*@[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?\.[A-Za-z]{2,}$"
+)
+MAX_EMAIL_LEN = 254
+MAX_TITLE_LEN = 255
+# Control characters (including CR/LF, which would allow mail header injection).
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 
 NUCLEIC_PROGRAMS = ("blastn", "tblastn")
 PROTEIN_PROGRAMS = ("blastp", "blastx")
+
+
+def _values(choices):
+    """Allowed values of a ``forms`` choice list (plain strings or (value, label))."""
+    return frozenset(c[0] if isinstance(c, (tuple, list)) else c for c in choices)
+
+
+# Every field that ends up on the blast command line is checked against the
+# same list that is used to render the corresponding <select> in the form.
+ALLOWED_CHOICES = {
+    "program": _values(forms.PROGRAM_CHOICES),
+    "blastnType": _values(forms.BLASTN_TYPE_CHOICES),
+    "blastpType": _values(forms.BLASTP_TYPE_CHOICES),
+    "bankTypeNuc": _values(forms.BANK_TYPE_CHOICES),
+    "bankTypeProt": _values(forms.BANK_TYPE_CHOICES),
+    "queryCode": _values(forms.GENETIC_CODE_CHOICES),
+    "dbCode": _values(forms.GENETIC_CODE_CHOICES),
+    "maxTargetSequences": _values(forms.MAX_TARGET_CHOICES),
+    "expect": _values(forms.EXPECT_CHOICES),
+    "wordSizesProt": _values(forms.PROT_WORD_SIZE_CHOICES),
+    "wordSizesBlastn": _values(forms.BLASTN_WORD_SIZE_CHOICES),
+    "wordSizesMegablast": _values(forms.MEGABLAST_WORD_SIZE_CHOICES),
+    "wordSizesDcMegablast": _values(forms.DC_MEGABLAST_WORD_SIZE_CHOICES),
+    "matricesNuc": _values(forms.NUC_MATRIX_CHOICES),
+    "matricesMegablast": _values(forms.NUC_MATRIX_CHOICES),
+    "matricesProt": _values(forms.PROT_MATRIX_CHOICES),
+    "gapCostsBlastn": _values(forms.BLASTN_GAP_COST_CHOICES),
+    "gapCostsProt": _values(forms.PROT_GAP_COST_CHOICES),
+    "templateTypes": _values(forms.TEMPLATE_TYPE_CHOICES),
+    "templateLengths": _values(forms.TEMPLATE_LENGTH_CHOICES),
+    "compositionalAdjustments": _values(forms.COMPOSITIONAL_ADJUSTMENT_CHOICES),
+    "compositionalAdjustmentsDelta": _values(forms.COMPOSITIONAL_ADJUSTMENT_DELTA_CHOICES),
+}
 
 
 class BlastRequest(BaseModel):
@@ -37,7 +79,7 @@ class BlastRequest(BaseModel):
     templateTypes: str = "coding"
     templateLengths: str = "18"
     compositionalAdjustments: str = "2"
-    compositionalAdjustmentsDelta: str = "2"
+    compositionalAdjustmentsDelta: str = "1"
     lowComplex: bool = True
     softMasking: bool = True
     lowerCase: bool = False
@@ -70,23 +112,33 @@ class BlastRequest(BaseModel):
         return list(choices.keys())
 
     # ---- validation -------------------------------------------------------
+    @field_validator("title")
+    @classmethod
+    def _clean_title(cls, v: str) -> str:
+        # The title is shown in e-mails: drop control characters (header
+        # injection) and keep it within the database column size.
+        return _CTRL_RE.sub(" ", v).strip()[:MAX_TITLE_LEN]
+
     @field_validator("email")
     @classmethod
     def _check_email(cls, v: str) -> str:
-        if v and not EMAIL_RE.match(v):
+        if v and (len(v) > MAX_EMAIL_LEN or not EMAIL_RE.fullmatch(v)):
             raise ValueError("Please enter a valid email address")
         return v
 
-    @field_validator("program", "blastnType", "blastpType")
+    @field_validator(*ALLOWED_CHOICES)
     @classmethod
     def _check_choice(cls, v: str, info) -> str:
-        field = info.field_name
-        allowed = {
-            "program": [c[0] for c in forms.PROGRAM_CHOICES],
-            "blastnType": [c[0] for c in forms.BLASTN_TYPE_CHOICES],
-            "blastpType": [c[0] for c in forms.BLASTP_TYPE_CHOICES],
-        }[field]
-        if v not in allowed:
+        if v not in ALLOWED_CHOICES[info.field_name]:
+            raise ValueError("The value you selected is not a valid choice")
+        return v
+
+    @field_validator("dbPath")
+    @classmethod
+    def _check_db_path(cls, v: str) -> str:
+        # The real allow-list is the configured banks (checked in main.py);
+        # here we only refuse anything that could not be a plain path.
+        if v and (_CTRL_RE.search(v) or len(v) > 1024):
             raise ValueError("The value you selected is not a valid choice")
         return v
 

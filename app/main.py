@@ -4,10 +4,13 @@ This is a rewrite of the legacy Symfony ``docker-sf-blast`` application,
 keeping the blast web parameters and the ``banks.yml`` / ``links.yml``
 configuration files.
 """
+import logging
 import os
 import re
+import shutil
 from pathlib import Path
 
+import nh3
 from fastapi import Depends, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,13 +30,43 @@ from .schemas import BlastRequest
 
 APP_DIR = Path(__file__).resolve().parent
 
+logger = logging.getLogger(__name__)
+
 settings = get_settings()
 
+MAX_UPLOAD_BYTES = settings.upload_limit * 1024 * 1024
+# A submission can carry up to 5 payloads (pasted sequence + 4 files).
+MAX_BODY_BYTES = MAX_UPLOAD_BYTES * 5 + 1024 * 1024
+
 app = FastAPI(title=settings.app_title)
+
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "same-origin",
+    # Deliberately light so custom templates / stylesheets keep working.
+    "Content-Security-Policy": "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+}
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    # Cheap early rejection of oversized submissions. This only sees the
+    # declared Content-Length: also set a body size limit on the reverse proxy.
+    length = request.headers.get("content-length")
+    if request.method in ("POST", "PUT", "PATCH") and length and length.isdigit():
+        if int(length) > MAX_BODY_BYTES:
+            return HTMLResponse("Request too large", status_code=413)
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)  # route-specific headers win
+    return response
 
 # Template lookup: an optional override directory (e.g. mounted from a volume)
 # is searched *before* the built-in templates, so a custom ``layout.html`` (and
 # any other template) can be provided without rebuilding the image.
+
+
 templates_dirs = [str(APP_DIR / "templates")]
 if settings.templates_override_dir and Path(settings.templates_override_dir).is_dir():
     templates_dirs.insert(0, settings.templates_override_dir)
@@ -66,6 +99,10 @@ db_provider = load_db_provider(settings.banks_config)
 DEFAULT_VALUES = {
     name: field.default for name, field in BlastRequest.model_fields.items()
 }
+
+
+class UploadTooLarge(Exception):
+    """An uploaded file exceeds ``settings.upload_limit``."""
 
 
 def _static_url(request: Request, path: str) -> str:
@@ -116,7 +153,7 @@ def _request_from_form(form_fields: dict, file_paths: dict) -> BlastRequest:
         "templateTypes": form_fields.get("templateTypes") or "coding",
         "templateLengths": form_fields.get("templateLengths") or "18",
         "compositionalAdjustments": form_fields.get("compositionalAdjustments") or "2",
-        "compositionalAdjustmentsDelta": form_fields.get("compositionalAdjustmentsDelta") or "2",
+        "compositionalAdjustmentsDelta": form_fields.get("compositionalAdjustmentsDelta") or "1",
         "lowComplex": _bool_from_form(form_fields.get("lowComplex")),
         "softMasking": _bool_from_form(form_fields.get("softMasking")),
         "lowerCase": _bool_from_form(form_fields.get("lowerCase")),
@@ -144,6 +181,33 @@ def _validation_errors(exc: ValidationError) -> dict:
             field = "bankTypeNuc"
         errors[field] = msg
     return errors
+
+
+# BLAST's HTML report embeds attacker-influenced text (query header, database
+# definition lines), so it must never reach the page as raw HTML.
+_PREVIEW_TAGS = {
+    "a", "b", "i", "u", "em", "strong", "pre", "code", "span", "div", "p", "br",
+    "hr", "font", "sub", "sup", "table", "thead", "tbody", "tr", "td", "th",
+    "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li",
+}
+_PREVIEW_ATTRS = {
+    "a": {"href", "name", "id", "title"},
+    "font": {"color", "size"},
+    "span": {"class", "id"},
+    "div": {"class", "id"},
+    "pre": {"class", "id"},
+    "td": {"colspan", "rowspan", "align"},
+    "th": {"colspan", "rowspan", "align"},
+}
+
+
+def _sanitize_preview(html: str) -> str:
+    return nh3.clean(
+        html,
+        tags=_PREVIEW_TAGS,
+        attributes=_PREVIEW_ATTRS,
+        url_schemes={"http", "https", "mailto"},
+    )
 
 
 def _render(request: Request, name: str, ctx: dict, status_code: int = 200):
@@ -223,7 +287,7 @@ async def submit(
     templateTypes: str = Form("coding"),
     templateLengths: str = Form("18"),
     compositionalAdjustments: str = Form("2"),
-    compositionalAdjustmentsDelta: str = Form("2"),
+    compositionalAdjustmentsDelta: str = Form("1"),
     lowComplex: str = Form("on"),
     softMasking: str = Form("on"),
     lowerCase: str = Form(""),
@@ -255,6 +319,12 @@ async def submit(
         "psiIterationNb": psiIterationNb, "psiPseudoCount": psiPseudoCount,
     }
 
+    if len(pastedSeq.encode("utf-8", "ignore")) > MAX_UPLOAD_BYTES:
+        return _render_index(
+            request, dict(DEFAULT_VALUES, **{**form_fields, "pastedSeq": ""}),
+            {"pastedSeq": f"The pasted sequence is too large (limit: {settings.upload_limit} MiB)"},
+        )
+
     # Create the job and its working directory first.
     scheduler = get_scheduler()
     job = Job()
@@ -264,12 +334,21 @@ async def submit(
     job.email = email
     work_dir = scheduler.get_work_dir(job)
 
+    def discard() -> None:
+        shutil.rmtree(work_dir, ignore_errors=True)
+
     def save_upload(upload: UploadFile | None, filename: str) -> str:
         if not upload or not upload.filename:
             return ""
         dest = os.path.join(work_dir, filename)
+        written = 0
         with open(dest, "wb") as fh:
-            fh.write(upload.file.read())
+            # Chunked copy with a hard cap instead of read() into memory.
+            while chunk := upload.file.read(1024 * 1024):
+                written += len(chunk)
+                if written > MAX_UPLOAD_BYTES:
+                    raise UploadTooLarge(upload.filename)
+                fh.write(chunk)
         return filename
 
     # Save uploaded files.
@@ -284,16 +363,26 @@ async def submit(
             file_paths["fileSeq"] = uploaded_file_seq
         file_paths["psiPSSM"] = save_upload(psiPSSM, "input.pssm")
         file_paths["phiPattern"] = save_upload(phiPattern, "input.pattern")
-    except OSError as exc:
-        return _render_index(request, dict(DEFAULT_VALUES, **form_fields), {"pastedSeq": f"Could not create file: {exc}"})
+    except UploadTooLarge:
+        discard()
+        return _render_index(
+            request, dict(DEFAULT_VALUES, **form_fields),
+            {"pastedSeq": f"An uploaded file is too large (limit: {settings.upload_limit} MiB)"},
+        )
+    except OSError:
+        logger.exception("Could not save uploaded files for job %s", job.job_uid)
+        discard()
+        return _render_index(request, dict(DEFAULT_VALUES, **form_fields), {"pastedSeq": "Could not store the uploaded files"})
 
     # Build and validate the request.
     try:
         brequest = _request_from_form(form_fields, file_paths)
     except ValidationError as exc:
+        discard()
         return _render_index(request, dict(DEFAULT_VALUES, **form_fields), _validation_errors(exc))
 
     if not brequest.is_perso_db() and brequest.dbPath and not db_provider.is_valid_path(brequest.dbPath):
+        discard()
         return _render_index(request, dict(DEFAULT_VALUES, **form_fields), {"bankTypeNuc": "The value you selected is not a valid choice"})
 
     # Build the command script.
@@ -344,8 +433,12 @@ async def submit(
     # Launch the job.
     try:
         job = scheduler.execute(job)
-    except Exception as exc:  # noqa: BLE001 - show a friendly error page
-        return _render_error(request, job.job_uid, f"Submission failed: {exc}", job)
+    except Exception:  # noqa: BLE001 - show a friendly error page
+        # Log the details server side; never echo scheduler/internal errors
+        # (URLs, tokens in messages, stack details) back to the client.
+        logger.exception("Submission of job %s failed", job.job_uid)
+        discard()
+        return _render_error(request, job.job_uid, "Submission failed. Please try again later.", job)
 
     db.add(job)
     db.commit()
@@ -460,6 +553,7 @@ def job_results(request: Request, uid: str, db: Session = Depends(get_db)):
             html_file = os.path.join(work_dir, file.fs_name)
 
     preview_results, crashed, truncated = _extract_preview(html_file)
+    preview_results = _sanitize_preview(preview_results)
 
     return _render(request, "results.html", {
         "request": request,
@@ -475,17 +569,32 @@ def job_results(request: Request, uid: str, db: Session = Depends(get_db)):
     })
 
 
+# Result files are served from the application's own origin. They contain
+# text derived from user input (BLAST HTML/XML reports), so they are sandboxed
+# (no script execution, opaque origin) and may not be MIME-sniffed.
+_RESULT_FILE_HEADERS = {
+    "Content-Security-Policy": (
+        "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:"
+    ),
+    "X-Content-Type-Options": "nosniff",
+}
+
+
 @app.get("/tmp/{program}/{uid}/{filename}")
 def result_file(program: str, uid: str, filename: str, db: Session = Depends(get_db)):
     job = db.get(Job, uid)
     if not job or job.program_name != program:
         return HTMLResponse("Job not found", status_code=404)
+    # Only the files declared for this job are downloadable (not the job
+    # script, stdout/stderr, mail body, uploaded databank, ...).
+    if filename not in {f.fs_name for f in job.result_files}:
+        return HTMLResponse("File not found", status_code=404)
     scheduler = get_scheduler()
     base = Path(scheduler.get_work_dir(job)).resolve()
     target = (base / filename).resolve()
-    if not str(target).startswith(str(base)) or not target.is_file():
+    if not target.is_relative_to(base) or not target.is_file():
         return HTMLResponse("File not found", status_code=404)
-    return FileResponse(str(target))
+    return FileResponse(str(target), headers=_RESULT_FILE_HEADERS)
 
 
 def _render_error(request: Request, uid: str, message: str, job=None):

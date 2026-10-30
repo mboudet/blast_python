@@ -1,7 +1,16 @@
 """Build the blast shell command from a BlastRequest.
 
 Mirrors the legacy ``command.txt.twig`` template.
+
+Security note: the returned script is executed by a shell on the compute
+nodes. Every value that originates from a request (or from a path derived from
+one) is therefore passed through :func:`shlex.quote`, in addition to being
+validated against allow-lists in :mod:`app.schemas`. ``pre_command`` and
+``link_command`` come from the administrator's configuration and are inserted
+as-is on purpose (they are shell snippets).
 """
+import shlex
+
 from .schemas import BlastRequest
 
 
@@ -17,65 +26,74 @@ def build_blast_command(
 ) -> str:
     """Return the full shell script that runs a blast job in ``work_dir``."""
 
+    q = shlex.quote
+    wd = work_dir if work_dir.endswith("/") else work_dir + "/"
+
+    def path(name: str) -> str:
+        """Shell-quoted absolute path of a file inside the job directory."""
+        return q(f"{wd}{name}")
+
     # ---- db path ----------------------------------------------------------
     if request.is_perso_db():
-        db_path = f"{work_dir}uploadedDB"
+        db_path = f"{wd}uploadedDB"
         dbtype = "prot" if request.program in ("blastp", "blastx") else "nucl"
-        make_db = (
-            f"makeblastdb -in {work_dir}uploadedDB.fasta -dbtype {dbtype} "
-            f"-out {work_dir}uploadedDB -title uploadedDB;"
-        )
+        make_db = shlex.join([
+            "makeblastdb",
+            "-in", f"{wd}uploadedDB.fasta",
+            "-dbtype", dbtype,
+            "-out", f"{wd}uploadedDB",
+            "-title", "uploadedDB",
+        ]) + ";"
     else:
         db_path = request.dbPath
         make_db = ""
 
-    # ---- blast command ----------------------------------------------------
-    parts = []
+    # ---- blast command (built as an argv list, never as a raw string) -----
+    argv: list[str] = []
 
     if request.program == "blastp" and request.blastpType in ("psiblast", "phiblast"):
-        parts.append("psiblast")
+        argv.append("psiblast")
     elif request.program == "blastp" and request.blastpType == "deltablast":
-        parts.append("deltablast")
+        argv.append("deltablast")
     else:
-        bin = request.program
+        argv.append(request.program)
         if request.program == "blastn":
-            bin += f" -task {request.blastnType}"
+            argv += ["-task", request.blastnType]
         elif request.program == "blastp":
-            bin += f" -task {request.blastpType}"
-        parts.append(bin)
+            argv += ["-task", request.blastpType]
 
     if request.fileSeq or request.pastedSeq:
-        parts.append(f"-query {work_dir}input.fasta")
+        argv += ["-query", f"{wd}input.fasta"]
 
-    parts.append(f"-db {db_path}")
-    parts.append(f"-evalue {request.expect}")
-    parts.append(f"-max_target_seqs {request.maxTargetSequences}")
-    parts.append(f"-soft_masking {'true' if request.softMasking else 'false'}")
+    argv += ["-db", db_path]
+    argv += ["-evalue", request.expect]
+    argv += ["-max_target_seqs", request.maxTargetSequences]
+    argv += ["-soft_masking", "true" if request.softMasking else "false"]
 
     if request.lowerCase:
-        parts.append("-lcase_masking")
+        argv.append("-lcase_masking")
 
     if request.program == "blastn" and request.blastnType == "megablast":
-        parts.append(f"-word_size {request.wordSizesMegablast}")
+        argv += ["-word_size", request.wordSizesMegablast]
     elif request.program == "blastn" and request.blastnType == "dc-megablast":
-        parts.append(f"-word_size {request.wordSizesDcMegablast}")
+        argv += ["-word_size", request.wordSizesDcMegablast]
     elif request.program == "blastn":
-        parts.append(f"-word_size {request.wordSizesBlastn}")
+        argv += ["-word_size", request.wordSizesBlastn]
     else:
-        parts.append(f"-word_size {request.wordSizesProt}")
+        argv += ["-word_size", request.wordSizesProt]
 
     if (
         request.program == "blastn" and
         request.blastnType == "dc-megablast" and
         int(request.templateLengths) != 0
     ):
-        parts.append(f"-template_length {request.templateLengths}")
-        parts.append(f"-template_type {request.templateTypes}")
+        argv += ["-template_length", request.templateLengths]
+        argv += ["-template_type", request.templateTypes]
 
     if request.program in ("tblastx", "blastx"):
-        parts.append(f"-query_gencode {request.queryCode}")
+        argv += ["-query_gencode", request.queryCode]
     if request.program in ("tblastx", "tblastn"):
-        parts.append(f"-db_gencode {request.dbCode}")
+        argv += ["-db_gencode", request.dbCode]
 
     if request.program == "blastn":
         matrix = (
@@ -84,66 +102,65 @@ def build_blast_command(
             else request.matricesNuc
         )
         reward, penalty = matrix.split(",")
-        parts.append(f"-reward {reward}")
-        parts.append(f"-penalty {penalty}")
+        argv += ["-reward", reward, "-penalty", penalty]
     else:
-        parts.append(f"-matrix {request.matricesProt}")
+        argv += ["-matrix", request.matricesProt]
 
     if request.program != "tblastx":
         if request.program == "blastn":
             gap_open, gap_ext = request.gapCostsBlastn.split(",")
         else:
             gap_open, gap_ext = request.gapCostsProt.split(",")
-        parts.append(f"-gapopen {gap_open}")
-        parts.append(f"-gapextend {gap_ext}")
+        argv += ["-gapopen", gap_open, "-gapextend", gap_ext]
 
     if (request.program == "blastp" and request.blastpType != "deltablast") or (
         request.program == "tblastn"
     ):
-        parts.append(f"-comp_based_stats {request.compositionalAdjustments}")
+        argv += ["-comp_based_stats", request.compositionalAdjustments]
     elif request.program == "blastp" and request.blastpType == "deltablast":
-        parts.append(f"-comp_based_stats {request.compositionalAdjustmentsDelta}")
+        argv += ["-comp_based_stats", request.compositionalAdjustmentsDelta]
 
     if request.program == "blastn":
-        parts.append(f"-dust {'yes' if request.lowComplex else 'no'}")
+        argv += ["-dust", "yes" if request.lowComplex else "no"]
     else:
-        parts.append(f"-seg {'yes' if request.lowComplex else 'no'}")
+        argv += ["-seg", "yes" if request.lowComplex else "no"]
 
     if request.program == "blastp" and request.blastpType in (
         "psiblast",
         "phiblast",
         "deltablast",
     ):
-        parts.append(f"-inclusion_ethresh {request.psiThreshold}")
-        parts.append(f"-num_iterations {request.psiIterationNb}")
-        parts.append(f"-pseudocount {request.psiPseudoCount}")
+        argv += ["-inclusion_ethresh", str(request.psiThreshold)]
+        argv += ["-num_iterations", str(request.psiIterationNb)]
+        argv += ["-pseudocount", str(request.psiPseudoCount)]
         if request.blastpType in ("psiblast", "deltablast"):
-            parts.append(f"-out_pssm {work_dir}{job_uid}.pssm")
-            parts.append(f"-out_ascii_pssm {work_dir}{job_uid}.pssm.ascii")
+            argv += ["-out_pssm", f"{wd}{job_uid}.pssm"]
+            argv += ["-out_ascii_pssm", f"{wd}{job_uid}.pssm.ascii"]
         if request.blastpType == "psiblast" and request.psiPSSM:
-            parts.append(f"-in_pssm {work_dir}input.pssm")
+            argv += ["-in_pssm", f"{wd}input.pssm"]
         if request.blastpType == "phiblast" and request.phiPattern:
-            parts.append(f"-phi_pattern {work_dir}input.pattern")
+            argv += ["-phi_pattern", f"{wd}input.pattern"]
         if request.blastpType == "deltablast":
-            parts.append(f"-rpsdb {cdd_delta}")
+            argv += ["-rpsdb", cdd_delta]
 
-    parts.append("-num_threads 4")
+    argv += ["-num_threads", "4"]
 
     if request.program == "blastp" and request.blastpType == "phiblast":
-        parts.append(f"-outfmt 0 -html -out {work_dir}{job_uid}.html;")
+        argv += ["-outfmt", "0", "-html", "-out", f"{wd}{job_uid}.html"]
     else:
-        parts.append(f"-outfmt 11 -out {work_dir}{job_uid}.asn;")
+        argv += ["-outfmt", "11", "-out", f"{wd}{job_uid}.asn"]
 
-    blast_command = " ".join(parts)
+    blast_command = shlex.join(argv) + ";"
 
     # ---- script -----------------------------------------------------------
     lines = []
-    lines.append(f"cd {work_dir}")
+    lines.append(f"cd {q(wd)}")
     lines.append("export PATH=./bin/:$PATH;")
     if pre_command:
         lines.append(pre_command)
     lines.append("")
-    lines.append(f'echo "{blast_command}" > {work_dir}blast_command.txt;')
+    # printf with a single-quoted argument: no expansion of the content.
+    lines.append(f"printf '%s\\n' {q(blast_command)} > {path('blast_command.txt')};")
     lines.append("")
     if make_db:
         lines.append(make_db)
@@ -152,26 +169,32 @@ def build_blast_command(
     lines.append("")
 
     if request.program != "blastp" or request.blastpType != "phiblast":
+        asn, xml = path(f"{job_uid}.asn"), path(f"{job_uid}.xml")
         lines += [
-            f"blast_formatter -archive {work_dir}{job_uid}.asn -outfmt 5 -out {work_dir}{job_uid}.xml;",
-            f"blast_formatter -archive {work_dir}{job_uid}.asn -outfmt 0 -html -out {work_dir}{job_uid}.html;",
-            f"blast_formatter -archive {work_dir}{job_uid}.asn -outfmt 0 -out {work_dir}{job_uid}.txt;",
-            f"blast_formatter -archive {work_dir}{job_uid}.asn -outfmt 6 -out {work_dir}{job_uid}.tsv;",
-            f"blast_formatter -archive {work_dir}{job_uid}.asn -outfmt 10 -out {work_dir}{job_uid}.csv;",
-            f"xml2gff3.py {work_dir}{job_uid}.xml > {work_dir}{job_uid}.gff3;",
+            f"blast_formatter -archive {asn} -outfmt 5 -out {xml};",
+            f"blast_formatter -archive {asn} -outfmt 0 -html -out {path(job_uid + '.html')};",
+            f"blast_formatter -archive {asn} -outfmt 0 -out {path(job_uid + '.txt')};",
+            f"blast_formatter -archive {asn} -outfmt 6 -out {path(job_uid + '.tsv')};",
+            f"blast_formatter -archive {asn} -outfmt 10 -out {path(job_uid + '.csv')};",
+            f"xml2gff3.py {xml} > {path(job_uid + '.gff3')};",
         ]
 
     if link_command:
         gff3_url = f"{result_url}{job_uid}.gff3"
+        html, linked, raw = (
+            path(f"{job_uid}.html"),
+            path(f"{job_uid}.htmllinked"),
+            path(f"{job_uid}.htmlraw"),
+        )
         lines.append("")
-        lines.append(f"export GFF3_URL={gff3_url}")
-        cmd = link_command.replace("{config}", link_config) if link_config else link_command
-        lines.append(f"{cmd} {work_dir}{job_uid}.html > {work_dir}{job_uid}.htmllinked;")
+        lines.append(f"export GFF3_URL={q(gff3_url)}")
+        cmd = link_command.replace("{config}", q(link_config)) if link_config else link_command
+        lines.append(f"{cmd} {html} > {linked};")
         lines += [
-            f"if [ -s {work_dir}{job_uid}.htmllinked ]",
+            f"if [ -s {linked} ]",
             "then",
-            f"    mv {work_dir}{job_uid}.html {work_dir}{job_uid}.htmlraw;",
-            f"    mv {work_dir}{job_uid}.htmllinked {work_dir}{job_uid}.html;",
+            f"    mv {html} {raw};",
+            f"    mv {linked} {html};",
             "fi",
         ]
 

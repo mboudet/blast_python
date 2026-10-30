@@ -8,13 +8,17 @@ Two backends are supported, selected through ``jobs_method``:
 Both share the same job script / working-directory conventions as the legacy
 application.
 """
+import logging
 import os
+import shlex
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 from .config import get_settings
 from .models import Job
+
+logger = logging.getLogger(__name__)
 
 
 class Scheduler:
@@ -35,7 +39,9 @@ class Scheduler:
     def get_work_dir(self, job: Job) -> str:
         settings = get_settings()
         work_dir = os.path.join(settings.jobs_work_dir, job.program_name, job.job_uid) + "/"
-        Path(work_dir).mkdir(parents=True, exist_ok=True)
+        # Not world-readable: the directory holds uploads, the submitter's
+        # e-mail address and the job script.
+        Path(work_dir).mkdir(mode=0o750, parents=True, exist_ok=True)
         return work_dir
 
     def get_result_url(self, job: Job) -> str:
@@ -45,22 +51,26 @@ class Scheduler:
 
     def build_job_script(self, job: Job, work_dir: str, lock_file: str = "") -> str:
         """Build the shell script that runs the job (and sends the email)."""
+        q = shlex.quote
         email_part = ""
         if job.has_valid_email():
             settings = get_settings()
             body_file = os.path.join(work_dir, "mail_body.txt")
+            # Everything is single-quoted: no variable/command expansion, and
+            # "--" ends option parsing so an address can never act as a flag.
             email_part = (
-                f'/bin/mail -s "{job.mail_subject}" '
-                f'-r "{settings.admin_email}" "{job.email}" < "{body_file}"'
+                f"/bin/mail -s {q(job.mail_subject)} "
+                f"-r {q(settings.admin_email)} -- {q(job.email)} < {q(body_file)}"
             )
 
+        wd = work_dir.rstrip("/")
         lines = []
-        lines.append(f"exec 3> {work_dir}/stdout.txt")
-        lines.append(f"exec 4> {work_dir}/stderr.txt")
+        lines.append(f"exec 3> {q(wd + '/stdout.txt')}")
+        lines.append(f"exec 4> {q(wd + '/stderr.txt')}")
         lines.append("(")
-        lines.append(f"    if [ ! -d {work_dir} ]")
+        lines.append(f"    if [ ! -d {q(wd)} ]")
         lines.append("    then")
-        lines.append(f"        mkdir -p {work_dir}")
+        lines.append(f"        mkdir -p {q(wd)}")
         lines.append("    fi")
         for cl in job.command.splitlines():
             lines.append(f"    {cl}")
@@ -69,7 +79,7 @@ class Scheduler:
         if email_part:
             lines.append(email_part)
         if lock_file:
-            lines.append(f"rm {lock_file}")
+            lines.append(f"rm {q(lock_file)}")
         return "\n".join(lines)
 
 

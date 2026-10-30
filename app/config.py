@@ -23,8 +23,9 @@ class Settings(BaseSettings):
     # --- Web / app ---------------------------------------------------------
     app_title: str = "Blast server (v2.2.29+)"
     base_url_path: str = ""
-    secret_key: str = "change-me"
-    upload_limit: int = 100  # MiB
+    upload_limit: int = 100  # MiB, per uploaded file / pasted sequence
+    # Max job submissions per client IP per minute (0 = disabled).
+    submit_rate_limit: int = 10
 
     # Optional directory mounted into the container that is searched *before*
     # the built-in templates. Drop a custom ``layout.html`` (and any other
@@ -76,7 +77,7 @@ class Settings(BaseSettings):
     cdd_delta_path: str = ""
     pre_command: str = ""
     link_command: str = (
-        "python3  ./bin/blast_links.py"
+        "python3 ./bin/blast_links.py "
         "--config ./bin/links.yml --gff-url $GFF3_URL"
     )
 

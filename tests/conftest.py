@@ -84,3 +84,10 @@ def banks():
     from app.dbprovider import load_db_provider
 
     return load_db_provider(get_settings().banks_config)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    main_module._submissions.clear()
+    yield
+    main_module._submissions.clear()

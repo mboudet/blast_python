@@ -53,7 +53,7 @@ class Job(Base):
 
     @property
     def mail_subject(self) -> str:
-        title = self.title or ""
+        title = " ".join((self.title or "").split())
         if title:
             title = f"'{title}' ({self.job_uid})"
         else:
@@ -61,10 +61,12 @@ class Job(Base):
         return f"{self.program_name}: completion of job {title}"
 
     def generate_job_uid(self) -> str:
-        import random
         import re
+        import secrets
 
-        uid = f"{self.program_name}-{random.random()}"
+        # The uid is the only secret protecting a job's results and files, so
+        # it must be unguessable: 128 bits from the OS CSPRNG (not ``random``).
+        uid = f"{self.program_name}-{secrets.token_hex(16)}"
         uid = re.sub(r"\W", "-", uid)
         self.job_uid = uid.lower()
         return self.job_uid
